@@ -1,0 +1,40 @@
+{
+  "rules": {
+    "devices": {
+      "$codice": {
+        ".read": "$codice.length >= 16",
+        ".write": "$codice.length >= 16",
+        "lat": {
+          ".validate": "newData.isNumber() && newData.val() >= -90 && newData.val() <= 90"
+        },
+        "lon": {
+          ".validate": "newData.isNumber() && newData.val() >= -180 && newData.val() <= 180"
+        },
+        "accuracy": {
+          ".validate": "newData.isNumber()"
+        },
+        "ts": {
+          ".validate": "newData.isNumber()"
+        },
+        "nome": {
+          ".validate": "newData.isString() && newData.val().length <= 40"
+        },
+        "ring": {
+          ".validate": "newData.isBoolean()"
+        },
+        "speed": {
+          ".validate": "newData.isNumber()"
+        },
+        "heading": {
+          ".validate": "newData.isNumber()"
+        },
+        "alt": {
+          ".validate": "newData.isNumber()"
+        },
+        "$altro": {
+          ".validate": false
+        }
+      }
+    }
+  }
+}

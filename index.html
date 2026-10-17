@@ -26,7 +26,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
   <div class="sfondo-griglia" aria-hidden="true"></div>
@@ -104,6 +104,14 @@
         <span class="tile-etichetta">Ultimo invio</span>
         <span id="t-invio" class="tile-valore mono">—</span>
       </div>
+      <div class="tile tile-largo">
+        <div class="tile-passi-testa">
+          <span class="tile-etichetta">Passi</span>
+          <span id="t-passi-kcal" class="tile-etichetta">0 kcal</span>
+        </div>
+        <span class="tile-valore mono"><span id="t-passi">0</span><small> / 10.000</small></span>
+        <div class="barra-passi"><i id="t-passi-barra"></i></div>
+      </div>
     </section>
 
     <section class="pannello">
@@ -167,6 +175,8 @@
         <div><span class="tile-etichetta">Direzione</span><span id="d-dir" class="mono">—</span></div>
         <div><span class="tile-etichetta">Precisione</span><span id="d-prec" class="mono">—</span></div>
         <div><span class="tile-etichetta">Velocità</span><span id="d-vel" class="mono">—</span></div>
+        <div><span class="tile-etichetta">Passi</span><span id="d-passi" class="mono">—</span></div>
+        <div><span class="tile-etichetta">Altitudine</span><span id="d-alt" class="mono">—</span></div>
       </div>
       <div class="scheda-azioni">
         <button id="suona" class="bottone-azione pericolo">
@@ -187,6 +197,26 @@
       <span class="tile-etichetta">Distanza percorsa · sessione</span>
       <div class="eroe-numero mono"><span id="s-dist">0.00</span><small> km</small></div>
       <div id="s-sub" class="scheda-sub">Avvia il sonar per raccogliere dati</div>
+    </section>
+
+    <section class="pannello passi-box">
+      <div class="anello-passi">
+        <svg viewBox="0 0 120 120">
+          <circle class="ap-fondo" cx="60" cy="60" r="50" pathLength="100"/>
+          <circle id="ap-arco" class="ap-arco" cx="60" cy="60" r="50" pathLength="100"/>
+        </svg>
+        <div class="ap-centro">
+          <span id="p-passi" class="mono">0</span>
+          <small>di 10.000 passi</small>
+        </div>
+      </div>
+      <div class="passi-dati">
+        <div><span class="tile-etichetta">Cadenza</span><span class="mono"><span id="p-cad">—</span><small> passi/min</small></span></div>
+        <div><span class="tile-etichetta">Calorie</span><span class="mono"><span id="p-kcal">0</span><small> kcal</small></span></div>
+        <div><span class="tile-etichetta">Km a piedi</span><span class="mono"><span id="p-km">0.00</span><small> km</small></span></div>
+        <div><span class="tile-etichetta">Passi totali</span><span id="p-tot" class="mono">0</span></div>
+        <span id="p-fonte" class="stato-pill">—</span>
+      </div>
     </section>
 
     <section class="griglia-tile">
@@ -278,6 +308,6 @@
 
   <div id="toast" class="toast" hidden></div>
 
-  <script type="module" src="app.js"></script>
+  <script type="module" src="app.js?v=2"></script>
 </body>
 </html>

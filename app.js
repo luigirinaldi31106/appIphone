@@ -193,8 +193,10 @@ $("avvia").addEventListener("click", () => {
 });
 
 function avviaCondivisione() {
-  if (!db && !DEMO) return toast("Prima configura Firebase in config.js");
   if (!("geolocation" in navigator)) return toast("Questo browser non supporta la posizione");
+  // Il contapassi va avviato subito: iPhone chiede il permesso solo dentro un tocco
+  avviaContapassi();
+  if (!db && !DEMO) toast("Firebase non configurato: GPS, passi e statistiche restano su questo telefono");
 
   // L'audio su iPhone si può "sbloccare" solo dopo un tocco dell'utente: lo facciamo ora
   audio = audio || new AudioContext();
@@ -210,7 +212,7 @@ function avviaCondivisione() {
 
   iniziaSessione();
   tieniSchermoAcceso();
-  if (!DEMO) ascoltaSquillo();
+  if (db) ascoltaSquillo();
 
   document.body.classList.add("live");
   $("pillola-testo").textContent = "LIVE";
@@ -220,10 +222,9 @@ function avviaCondivisione() {
 
 function fermaCondivisione() {
   if (DEMO) clearInterval(idWatch);
-  else {
-    navigator.geolocation.clearWatch(idWatch);
-    off(ref(db, `devices/${mioCodice}/ring`));
-  }
+  else navigator.geolocation.clearWatch(idWatch);
+  if (db) off(ref(db, `devices/${mioCodice}/ring`));
+  fermaContapassi();
   idWatch = null;
   wakeLock?.release();
   wakeLock = null;
@@ -265,13 +266,21 @@ function posizioneRicevuta(posizione) {
     speed: campione.kmh / 3.6,
     heading: typeof c.heading === "number" && !isNaN(c.heading) ? Math.round(c.heading) : null,
     alt: typeof c.altitude === "number" ? Math.round(c.altitude) : null,
+    passi: passiSessione(),
     ts: posizione.timestamp
   });
 }
 
 async function inviaAlDatabase(dati) {
   try {
-    if (!DEMO) await update(ref(db, `devices/${mioCodice}`), dati);
+    if (!db) {
+      // senza Firebase non inviamo niente: solo l'onda sul radar
+      $("t-invio").textContent = DEMO ? new Date().toLocaleTimeString("it-IT") : "Solo locale";
+      if (DEMO) sessione.invii++;
+      emettiOnda();
+      return;
+    }
+    await update(ref(db, `devices/${mioCodice}`), dati);
     sessione.invii++;
     $("t-invio").textContent = new Date().toLocaleTimeString("it-IT");
     emettiOnda();
@@ -362,14 +371,15 @@ let sessione = sessioneVuota();
 let timerSessione = null;
 
 function sessioneVuota() {
-  return { inizio: null, fine: null, campioni: [], distanza: 0, invii: 0, velMax: 0, ultimo: null };
+  return { inizio: null, fine: null, campioni: [], distanza: 0, invii: 0, velMax: 0, ultimo: null, passi: 0, tempiPassi: [] };
 }
 
 function totali() {
   return {
     distanza: Number(leggi("totDistanza")) || 0,
     tempo: Number(leggi("totTempo")) || 0,
-    sessioni: Number(leggi("totSessioni")) || 0
+    sessioni: Number(leggi("totSessioni")) || 0,
+    passi: Number(leggi("totPassi")) || 0
   };
 }
 
@@ -387,6 +397,8 @@ function chiudiSessione() {
   clearInterval(timerSessione);
   sessione.fine = Date.now();
   salva("totTempo", totali().tempo + (sessione.fine - sessione.inizio));
+  // se i passi erano stimati dal GPS, li aggiungiamo al totale solo alla fine
+  if (fontePassi === "gps") salva("totPassi", totali().passi + passiSessione());
 }
 
 // Salva un punto e calcola distanza e velocità rispetto al precedente
@@ -476,17 +488,148 @@ function aggiornaStatistiche() {
   $("s-tot-dist").textContent = `${(tot.distanza / 1000).toFixed(2)} km`;
   $("s-tot-tempo").textContent = `${Math.round((tot.tempo + (idWatch !== null ? Date.now() - s.inizio : 0)) / 60000)} min`;
   $("s-sessioni").textContent = tot.sessioni;
+  aggiornaPassi();
 }
 
 $("azzera").addEventListener("click", () => {
   if (!confirm("Vuoi azzerare tutte le statistiche di questo telefono?")) return;
-  ["totDistanza", "totTempo", "totSessioni"].forEach((k) => salva(k, 0));
+  ["totDistanza", "totTempo", "totSessioni", "totPassi"].forEach((k) => salva(k, 0));
   const inCorso = idWatch !== null;
   sessione = sessioneVuota();
   if (inCorso) sessione.inizio = Date.now();
   aggiornaStatistiche();
   toast("Statistiche azzerate");
 });
+
+// =====================================================================
+//  CONTAPASSI
+//  Riconosce i passi dai movimenti del telefono (accelerometro).
+//  Se il sensore non c'è o il permesso è negato, li stima dalla distanza GPS.
+// =====================================================================
+const OBIETTIVO_PASSI = 10000;
+const LUNGHEZZA_PASSO = 0.72; // metri, un passo medio
+let fontePassi = "gps";       // "sensore" oppure "gps"
+let ascoltoMovimento = false;
+let timerDemoPassi = null;
+
+// Stato del rilevatore di passi
+const rilevatore = { base: 9.81, liscio: 0, sopra: false, ultimoPicco: 0, inAttesa: [] };
+
+function avviaContapassi() {
+  fontePassi = "gps";
+  if (DEMO) {
+    // ~110 passi al minuto, come una camminata
+    fontePassi = "sensore";
+    clearInterval(timerDemoPassi);
+    timerDemoPassi = setInterval(() => aggiungiPasso(Date.now()), 545);
+    return;
+  }
+  const ascolta = () => {
+    if (!ascoltoMovimento) window.addEventListener("devicemotion", movimento);
+    ascoltoMovimento = true;
+  };
+  // Su iPhone serve il permesso "Movimento e orientamento"
+  if (typeof DeviceMotionEvent?.requestPermission === "function") {
+    DeviceMotionEvent.requestPermission()
+      .then((r) => (r === "granted" ? ascolta() : toast("Senza il permesso Movimento i passi sono stimati dal GPS")))
+      .catch(() => {});
+  } else if ("DeviceMotionEvent" in window) {
+    ascolta();
+  }
+}
+
+function fermaContapassi() {
+  clearInterval(timerDemoPassi);
+  rilevatore.inAttesa = [];
+}
+
+// Chiamata ~60 volte al secondo con l'accelerazione del telefono
+function movimento(e) {
+  if (idWatch === null) return;
+  const a = e.accelerationIncludingGravity;
+  if (!a || a.x === null) return;
+  fontePassi = "sensore";
+
+  const r = rilevatore;
+  const forza = Math.hypot(a.x, a.y, a.z);              // quanto "spinge" il telefono
+  r.base = r.base * 0.98 + forza * 0.02;                 // media lenta = la gravità
+  r.liscio = r.liscio * 0.75 + (forza - r.base) * 0.25;  // tolgo il tremolio
+
+  // Un passo = la forza sale sopra la soglia e poi riscende
+  if (!r.sopra && r.liscio > 1.1) {
+    r.sopra = true;
+    passoCandidato(Date.now());
+  } else if (r.sopra && r.liscio < 0.3) {
+    r.sopra = false;
+  }
+}
+
+// Per non contare scossoni isolati, i passi valgono solo se arrivano a ritmo:
+// dopo una pausa ne servono 4 di fila prima di iniziare a contarli
+function passoCandidato(ora) {
+  const r = rilevatore;
+  const intervallo = ora - r.ultimoPicco;
+  if (intervallo < 260) return;          // troppo ravvicinati: è un tremolio
+  r.ultimoPicco = ora;
+
+  if (intervallo > 2000) {               // ripartenza dopo una pausa
+    r.inAttesa = [ora];
+    return;
+  }
+  if (r.inAttesa.length) {
+    r.inAttesa.push(ora);
+    if (r.inAttesa.length >= 4) {
+      r.inAttesa.forEach(aggiungiPasso);
+      r.inAttesa = [];
+    }
+    return;
+  }
+  aggiungiPasso(ora);
+}
+
+function aggiungiPasso(t) {
+  sessione.passi++;
+  sessione.tempiPassi.push(t);
+  if (sessione.tempiPassi.length > 200) sessione.tempiPassi.shift();
+  salva("totPassi", totali().passi + 1);
+  aggiornaPassi();
+}
+
+function passiSessione() {
+  return fontePassi === "sensore" ? sessione.passi : Math.round(sessione.distanza / LUNGHEZZA_PASSO);
+}
+
+// Passi al minuto
+function cadenza() {
+  if (fontePassi === "sensore") {
+    const daUnMinuto = Date.now() - 60000;
+    return sessione.tempiPassi.filter((t) => t > daUnMinuto).length;
+  }
+  const ultimo = sessione.campioni[sessione.campioni.length - 1];
+  return ultimo ? Math.round((ultimo.kmh / 3.6 / LUNGHEZZA_PASSO) * 60) : 0;
+}
+
+function aggiornaPassi() {
+  const passi = passiSessione();
+  const kcal = Math.round(passi * 0.04);
+  const percentuale = Math.min(100, (passi / OBIETTIVO_PASSI) * 100);
+
+  // riquadro nella schermata Sonar
+  $("t-passi").textContent = passi.toLocaleString("it-IT");
+  $("t-passi-barra").style.width = `${percentuale}%`;
+  $("t-passi-kcal").textContent = `${kcal} kcal`;
+
+  if (tabAttiva !== "tab-stat") return;
+  $("p-passi").textContent = passi.toLocaleString("it-IT");
+  $("ap-arco").style.strokeDasharray = `${percentuale} 100`;
+  $("p-cad").textContent = idWatch !== null ? cadenza() : "—";
+  $("p-kcal").textContent = kcal;
+  $("p-km").textContent = ((passi * LUNGHEZZA_PASSO) / 1000).toFixed(2);
+  const totale = totali().passi + (fontePassi === "gps" && idWatch !== null ? passi : 0);
+  $("p-tot").textContent = totale.toLocaleString("it-IT");
+  $("p-fonte").textContent = fontePassi === "sensore" ? "Sensore movimento" : "Stima da GPS";
+  $("p-fonte").dataset.stato = fontePassi === "sensore" ? "ottimo" : "buono";
+}
 
 // ---------- Grafici disegnati in SVG ----------
 const NS = "http://www.w3.org/2000/svg";
@@ -717,6 +860,8 @@ function aggiornaScheda(d) {
   $("d-live").classList.toggle("live", recente);
   $("d-prec").textContent = `±${d.accuracy} m`;
   $("d-vel").textContent = typeof d.speed === "number" ? `${(d.speed * 3.6).toFixed(1)} km/h` : "—";
+  $("d-passi").textContent = typeof d.passi === "number" ? d.passi.toLocaleString("it-IT") : "—";
+  $("d-alt").textContent = typeof d.alt === "number" ? `${d.alt} m` : "—";
   $("indicazioni").href = `https://maps.apple.com/?daddr=${d.lat},${d.lon}`;
   $("suona-testo").textContent = d.ring ? "Sta suonando…" : "Fai suonare";
   $("suona").classList.toggle("attivo", !!d.ring);
@@ -1110,6 +1255,8 @@ function demoSegui(codice) {
       lon: 9.1935 + Math.cos(t / 20) * 0.002,
       accuracy: 12,
       speed: 1.3,
+      passi: 2400 + t * 4,
+      alt: 122,
       ts: Date.now(),
       ring: ultimiDati?.ring || false
     });

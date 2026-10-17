@@ -31,6 +31,9 @@
         "alt": {
           ".validate": "newData.isNumber()"
         },
+        "passi": {
+          ".validate": "newData.isNumber()"
+        },
         "$altro": {
           ".validate": false
         }

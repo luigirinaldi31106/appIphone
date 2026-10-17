@@ -300,6 +300,43 @@ body.live .stato-riga { color: var(--accento); }
 .barre[data-livello="4"] i:nth-child(-n+4) { background: var(--accento); box-shadow: 0 0 6px rgba(42, 245, 193, 0.5); }
 .barre[data-livello="1"] i:nth-child(1) { background: var(--rosso); box-shadow: none; }
 
+/* Riquadro passi (schermata Sonar) */
+.tile-largo { grid-column: span 2; }
+.tile-passi-testa { display: flex; justify-content: space-between; }
+.barra-passi { height: 6px; border-radius: 99px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
+.barra-passi i {
+  display: block; height: 100%; width: 0;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--blu), var(--accento));
+  box-shadow: 0 0 10px rgba(42, 245, 193, 0.5);
+  transition: width 0.4s ease;
+}
+
+/* Anello passi (schermata Statistiche) */
+.passi-box { display: flex; align-items: center; gap: 16px; }
+.anello-passi { position: relative; width: 46%; max-width: 170px; flex: none; aspect-ratio: 1; }
+.anello-passi svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.anello-passi circle { fill: none; stroke-width: 9; stroke-linecap: round; }
+.ap-fondo { stroke: rgba(255, 255, 255, 0.07); }
+.ap-arco {
+  stroke: var(--accento);
+  stroke-dasharray: 0 100;
+  filter: drop-shadow(0 0 5px rgba(42, 245, 193, 0.6));
+  transition: stroke-dasharray 0.5s ease;
+}
+.ap-centro {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center;
+}
+.ap-centro .mono { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; }
+.ap-centro small { font-size: 10.5px; color: var(--testo-2); margin-top: 2px; }
+.passi-dati { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 9px; }
+.passi-dati > div { display: flex; flex-direction: column; gap: 2px; }
+.passi-dati .mono { font-size: 16px; font-weight: 600; }
+.passi-dati small { font-size: 10.5px; color: var(--testo-2); font-weight: 400; }
+.passi-dati .stato-pill { align-self: flex-start; margin-top: 2px; }
+
 /* ---------------- Pannelli ---------------- */
 .pannello {
   background: var(--pannello);
@@ -491,7 +528,7 @@ input:focus { border-color: var(--accento); box-shadow: 0 0 0 3px var(--accento-
 }
 .badge.live { color: var(--accento); background: var(--accento-tenue); border-color: rgba(42, 245, 193, 0.35); }
 .scheda-dati {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 1px;
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1px;
   background: var(--linea);
   border-radius: 12px; overflow: hidden;
   margin-bottom: 14px;
